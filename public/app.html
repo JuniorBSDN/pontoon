@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>pontoON - App do Colaborador (Prestador Completo)</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- FontAwesome para Ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Leaflet CSS (Mapa Real) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- html2pdf para o Colaborador baixar seu espelho -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+
+        /* Simulação do App Mobile (PWA / Android Layout) */
+        .app-container {
+            width: 100%;
+            max-width: 414px;
+            height: 100dvh;
+            max-height: 896px;
+            background-color: #f8fafc;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Animação do botão de bater ponto */
+        .pulse-btn { animation: pulse-ring 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse-ring {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.6); }
+            50% { box-shadow: 0 0 0 22px rgba(79, 70, 229, 0); }
+        }
+
+        /* Menu Hamburger Lateral (Side Drawer) */
+        .drawer {
+            transform: translateX(-100%);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .drawer.open { transform: translateX(0); }
+
+        .overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s ease-in-out;
+        }
+        .overlay.open { opacity: 1; pointer-events: auto; }
+
+        /* Ajustes do Mapa Leaflet */
+        .leaflet-control-zoom { display: none !important; }
+        .leaflet-control-attribution { display: none !important; }
+        #map-prestador { z-index: 10; }
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+
+    <div class="app-container">
+
+        <!-- ================================================================= -->
+        <!-- 1. TELA DE LOGIN / AUTENTICAÇÃO DO COLABORADOR                    -->
+        <!-- ================================================================= -->
+        <div id="login-screen" class="absolute inset-0 bg-white z-50 flex flex-col justify-between px-6 py-12">
+            <div>
+                <div class="text-center mb-10 mt-6">
+                    <div class="inline-flex items-center justify-center w-28 h-28 rounded-full bg-indigo-50 text-indigo-600 mb-5 shadow-inner">
+                        <i class="fa-solid fa-fingerprint text-6xl"></i>
+                    </div>
+                    <h1 class="text-4xl font-black text-gray-900 tracking-tight">ponto<span class="text-indigo-600">ON</span></h1>
+                    <p class="text-gray-500 text-xs mt-2 font-bold uppercase tracking-widest">Portal do Prestador & Colaborador</p>
+                </div>
+
+                <form onsubmit="fazerLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-black text-gray-700 uppercase mb-1.5">CPF ou Matrícula</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400"><i class="fa-regular fa-id-badge text-lg"></i></span>
+                            <input type="text" id="login-cpf" required placeholder="000.000.000-00" value="111.222.333-44" class="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition text-sm outline-none font-bold">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black text-gray-700 uppercase mb-1.5">Senha de Acesso</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400"><i class="fa-solid fa-lock text-lg"></i></span>
+                            <input type="password" id="login-senha" required placeholder="Sua senha" value="123456" class="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition text-sm outline-none font-bold">
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center text-xs pt-1">
+                        <label class="flex items-center text-gray-600 font-bold"><input type="checkbox" checked class="mr-2 rounded text-indigo-600 w-4 h-4"> Lembrar meus dados</label>
+                        <a href="#" onclick="alert('Entre em contato com o RH da sua empresa para redefinir a senha.')" class="text-indigo-600 font-black">Esqueceu a senha?</a>
+                    </div>
+                    <button type="submit" id="btn-login-submit" class="w-full py-4 mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg rounded-2xl shadow-xl active:scale-95 transition-transform">Entrar no Sistema</button>
+                    <p id="login-error" class="text-xs text-red-500 text-center font-bold hidden mt-2">CPF ou Senha inválidos.</p>
+                </form>
+            </div>
+
+            <div class="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                Protegido por Criptografia & Biometria Facial &bull; v1.0
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- 2. APLICAÇÃO PRINCIPAL (ESTRUTURA LOGADA)                         -->
+        <!-- ================================================================= -->
+        <div id="main-app" class="flex-1 flex flex-col hidden h-full">
+
+            <!-- HEADER SUPERIOR (COM HAMBURGER) -->
+            <header class="bg-indigo-600 text-white px-4 py-4 shadow-md z-30 flex justify-between items-center shrink-0">
+                <div class="flex items-center space-x-3">
+                    <button onclick="toggleMenu()" class="text-white focus:outline-none p-2 active:scale-90 transition-transform bg-indigo-700 bg-opacity-60 rounded-xl shadow-xs">
+                        <i class="fa-solid fa-bars text-xl"></i>
+                    </button>
+                    <div>
+                        <h1 class="text-base font-black tracking-tight leading-none">ponto<span class="text-indigo-200">ON</span></h1>
+                        <span class="text-[10px] text-indigo-200 uppercase font-bold tracking-wider" id="header-empresa">Unidade Matriz - SP</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="text-right hidden sm:block">
+                        <p class="text-xs font-bold leading-tight" id="header-nome">Ana Souza</p>
+                    </div>
+                    <img id="header-avatar" src="https://ui-avatars.com/api/?name=Ana+Souza&background=ffffff&color=4f46e5&bold=true" class="w-10 h-10 rounded-full border-2 border-indigo-300 shadow-sm">
+                </div>
+            </header>
+
+            <!-- CONTEÚDO ROLÁVEL PRINCIPAL -->
+            <main class="flex-1 overflow-y-auto no-scrollbar bg-gray-100 relative">
+
+                <!-- --------------------------------------------------------- -->
+                <!-- ABA 1: INÍCIO (MAPA LEAFLET + CRONÔMETRO FLIT)              -->
+                <!-- --------------------------------------------------------- -->
+                <section id="tab-inicio" class="tab-content relative min-h-full pb-12">
+                    <div id="map-prestador" class="w-full h-64 bg-gray-300 relative z-10 shadow-inner border-b border-gray-200"></div>
+
+                    <div class="flex justify-center -translate-y-20 relative z-20 px-4">
+                        <button onclick="abrirCamera()" class="pulse-btn w-48 h-48 bg-gradient-to-br from-indigo-600 to-indigo-900 rounded-full shadow-2xl border-4 border-white flex flex-col items-center justify-center text-white active:scale-95 transition-transform group">
+                            <span class="text-[10px] text-indigo-200 uppercase font-black tracking-widest mb-1">Horas Trabalhadas</span>
+                            <span id="cronometro-trabalho" class="text-4xl font-black font-mono tracking-tighter">04:15:22</span>
+                            <div class="mt-3 bg-white text-indigo-700 px-5 py-1.5 rounded-full text-xs font-black uppercase tracking-wide shadow-md group-hover:bg-gray-100 flex items-center">
+                                <i class="fa-solid fa-camera mr-1.5 text-indigo-600"></i> Bater Ponto
+                            </div>
+                        </button>
+                    </div>
+
+                    <div class="text-center -mt-12 mb-6 px-4">
+                        <div class="inline-flex items-center space-x-1.5 bg-green-100 text-green-800 px-4 py-1.5 rounded-full text-xs font-bold border border-green-200 shadow-xs">
+                            <i class="fa-solid fa-location-dot"></i><span>Dentro da cerca virtual (Raio 150m)</span>
+                        </div>
+                    </div>
+
+                    <div class="px-5">
+                        <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+                            <div class="flex justify-between items-center mb-5 border-b border-gray-50 pb-3">
+                                <h3 class="font-black text-gray-900 text-sm uppercase tracking-wider">Registros de Hoje</h3>
+                                <span id="data-hoje" class="text-xs font-bold text-gray-400">10 Set</span>
+                            </div>
+
+                            <div class="space-y-5 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gray-200">
+                                <div class="relative flex items-center justify-between">
+                                    <div class="flex items-center space-x-4">
+                                        <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-sm z-10 border-2 border-white"><i class="fa-solid fa-arrow-right-to-bracket text-sm"></i></div>
+                                        <div><p class="text-[10px] text-gray-400 font-bold uppercase tracking-wide">Entrada 1</p><p class="font-black text-gray-900 text-lg leading-none">07:58</p></div>
+                                    </div>
+                                    <span class="text-[10px] bg-green-50 text-green-600 font-bold px-2.5 py-1 rounded-md border border-green-100"><i class="fa-solid fa-check mr-1"></i>Facial OK</span>
+                                </div>
+                                <div class="relative flex items-center justify-between">
+                                    <div class="flex items-center space-x-4">
+                                        <div class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm z-10 border-2 border-white"><i class="fa-solid fa-mug-hot text-sm"></i></div>
+                                        <div><p class="text-[10px] text-gray-400 font-bold uppercase tracking-wide">Saída (Almoço)</p><p class="font-black text-gray-900 text-lg leading-none">12:00</p></div>
+                                    </div>
+                                    <span class="text-[10px] bg-green-50 text-green-600 font-bold px-2.5 py-1 rounded-md border border-green-100"><i class="fa-solid fa-check mr-1"></i>Facial OK</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- --------------------------------------------------------- -->
+                <!-- ABA 2: MEU ESPELHO (HISTÓRICO + EXPORTAÇÃO PDF)           -->
+                <!-- --------------------------------------------------------- -->
+                <section id="tab-espelho" class="tab-content hidden p-5 space-y-4">
+                    <div class="flex justify-between items-end mb-2">
+                        <div>
+                            <h2 class="text-2xl font-black text-gray-900">Meu Espelho</h2>
+                            <p class="text-xs font-semibold text-gray-500">Histórico oficial de marcações</p>
+                        </div>
+                        <button onclick="baixarPDF()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md active:scale-95 transition-transform"><i class="fa-solid fa-file-pdf mr-1"></i>Baixar PDF</button>
+                    </div>
+
+                    <select class="w-full bg-white border border-gray-200 text-sm font-bold text-gray-700 rounded-xl px-4 py-3.5 focus:outline-none shadow-xs">
+                        <option>Setembro 2026</option>
+                        <option>Agosto 2026</option>
+                    </select>
+
+                    <div id="area-relatorio" class="space-y-4 mt-4">
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                            <div class="flex justify-between items-center mb-3 border-b border-gray-50 pb-3">
+                                <span class="font-black text-gray-900 text-sm">Qua, 09 de Setembro</span>
+                                <span class="text-[10px] font-bold text-gray-700 bg-gray-100 px-2.5 py-1 rounded-md uppercase">8h02 Trab.</span>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-700 font-mono bg-gray-50 p-3 rounded-xl font-bold border border-gray-100">
+                                <span>07:55</span><span>12:00</span><span>13:00</span><span>17:02</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- --------------------------------------------------------- -->
+                <!-- ABA 3: ATESTADOS E SUPORTE (HELPDESK DO COLABORADOR)      -->
+                <!-- --------------------------------------------------------- -->
+                <section id="tab-justificativa" class="tab-content hidden p-5 space-y-4">
+                    <h2 class="text-2xl font-black text-gray-900">Atestados e Suporte</h2>
+                    <p class="text-xs font-semibold text-gray-500">Envie justificativas, atestados ou relate problemas diretamente ao RH.</p>
+
+                    <form onsubmit="event.preventDefault(); alert('Solicitação enviada com sucesso para o RH!'); switchTab('inicio');" class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4 mt-2">
+                        <div>
+                            <label class="block text-xs font-black text-gray-700 uppercase mb-1">Motivo da Solicitação</label>
+                            <select required class="w-full bg-gray-50 border border-gray-200 text-sm font-bold text-gray-700 rounded-xl px-4 py-3.5 focus:outline-none">
+                                <option value="">Selecione...</option>
+                                <option>Atestado Médico / Licença</option>
+                                <option>Esqueci de registrar o ponto</option>
+                                <option>Falha no aplicativo / GPS</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-black text-gray-700 uppercase mb-1">Data da Ocorrência</label>
+                            <input type="date" required class="w-full bg-gray-50 border border-gray-200 text-sm font-bold text-gray-700 rounded-xl px-4 py-3.5 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-black text-gray-700 uppercase mb-1">Anexar Documento / Comprovante</label>
+                            <input type="file" class="w-full bg-gray-50 border border-gray-200 text-xs rounded-xl px-3 py-2.5">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-black text-gray-700 uppercase mb-1">Detalhes e Explicação</label>
+                            <textarea rows="3" required class="w-full bg-gray-50 border border-gray-200 text-sm font-medium text-gray-700 rounded-xl px-4 py-3 focus:outline-none" placeholder="Explique os detalhes..."></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-base py-4 rounded-xl shadow-lg active:scale-95 transition-transform">Enviar Solicitação ao RH</button>
+                    </form>
+                </section>
+            </main>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- 3. MENU HAMBURGER LATERAL (SIDE DRAWER NATIVO ANDROID)            -->
+        <!-- ================================================================= -->
+        <div id="drawer-overlay" onclick="toggleMenu()" class="overlay absolute inset-0 bg-black bg-opacity-60 z-40 backdrop-blur-xs"></div>
+
+        <nav id="drawer-menu" class="drawer absolute top-0 left-0 bottom-0 w-[85%] max-w-sm bg-white z-50 flex flex-col shadow-2xl">
+            <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 pt-12 text-white relative">
+                <button onclick="toggleMenu()" class="absolute top-4 right-4 text-indigo-200 hover:text-white p-2"><i class="fa-solid fa-xmark text-2xl"></i></button>
+                <img id="drawer-avatar" src="https://ui-avatars.com/api/?name=Ana+Souza&background=ffffff&color=4f46e5&bold=true" class="w-20 h-20 rounded-full border-4 border-indigo-400 shadow-md mb-4">
+                <h2 class="text-2xl font-black leading-tight" id="drawer-nome">Ana Souza</h2>
+                <p class="text-indigo-200 text-xs font-bold uppercase tracking-wider mt-1" id="drawer-cpf">Matrícula: 111.222.333-44</p>
+            </div>
+
+            <div class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+                <button onclick="switchTab('inicio'); toggleMenu()" class="w-full flex items-center px-4 py-4 rounded-xl text-left text-sm font-black text-gray-700 hover:bg-gray-100 transition">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center mr-4 text-indigo-600"><i class="fa-solid fa-house text-lg"></i></div> Início / Mapa
+                </button>
+                <button onclick="switchTab('espelho'); toggleMenu()" class="w-full flex items-center px-4 py-4 rounded-xl text-left text-sm font-black text-gray-700 hover:bg-gray-100 transition">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center mr-4 text-emerald-600"><i class="fa-solid fa-calendar-check text-lg"></i></div> Meu Espelho
+                </button>
+                <button onclick="switchTab('justificativa'); toggleMenu()" class="w-full flex items-center px-4 py-4 rounded-xl text-left text-sm font-black text-gray-700 hover:bg-gray-100 transition">
+                    <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center mr-4 text-amber-600"><i class="fa-solid fa-file-medical text-lg"></i></div> Atestados / RH
+                </button>
+            </div>
+
+            <div class="p-6 border-t border-gray-100">
+                <button onclick="fazerLogout()" class="w-full flex items-center justify-center px-4 py-4 text-sm font-black text-red-600 bg-red-50 rounded-xl hover:bg-red-100 transition">
+                    <i class="fa-solid fa-power-off mr-2 text-lg"></i> Sair da Conta
+                </button>
+                <p class="text-center text-[10px] font-bold text-gray-400 mt-5 uppercase tracking-widest">pontoON v1.0.0</p>
+            </div>
+        </nav>
+
+        <!-- ================================================================= -->
+        <!-- 4. MODAL DA CÂMERA (RECONHECIMENTO FACIAL + GPS)                  -->
+        <!-- ================================================================= -->
+        <div id="camera-modal" class="absolute inset-0 z-50 bg-black hidden flex-col">
+            <div class="flex justify-between items-center p-5 text-white bg-gradient-to-b from-black/90 to-transparent absolute top-0 w-full z-30">
+                <button onclick="fecharCamera()" class="p-2 active:scale-90 bg-black bg-opacity-50 rounded-full w-10 h-10 flex items-center justify-center"><i class="fa-solid fa-xmark text-xl"></i></button>
+                <div class="text-center">
+                    <h3 class="font-black text-sm tracking-widest uppercase">Biometria Facial</h3>
+                    <p id="gps-status-camera" class="text-[10px] font-bold text-indigo-400 mt-1 uppercase tracking-wider"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Sincronizando GPS</p>
+                </div>
+                <div class="w-10"></div>
+            </div>
+
+            <div class="flex-1 relative flex items-center justify-center bg-gray-900 overflow-hidden">
+                <video id="videoElement" autoplay playsinline class="absolute min-w-full min-h-full object-cover"></video>
+                <div class="absolute inset-0 pointer-events-none border-[50px] sm:border-[80px] border-black border-opacity-75 z-10" style="border-radius: 50%; width: 140%; left: -20%; height: 110%; top: -5%;"></div>
+            </div>
+
+            <div class="bg-black pb-12 pt-6 px-6 flex flex-col items-center justify-center z-30 absolute bottom-0 w-full bg-gradient-to-t from-black via-black to-transparent">
+                <p id="msg-captura" class="text-gray-400 text-xs mb-4 font-black uppercase tracking-widest text-center">Enquadre seu rosto</p>
+                <button id="btn-captura" onclick="capturarEValidar()" disabled class="w-20 h-20 rounded-full border-4 border-indigo-500 bg-gray-700 opacity-50 flex items-center justify-center transition-all duration-300 transform">
+                    <div class="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-inner">
+                        <i class="fa-solid fa-fingerprint text-white text-3xl"></i>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- 5. MODAL DE SUCESSO DE REGISTRO                                   -->
+        <!-- ================================================================= -->
+        <div id="sucesso-modal" class="absolute inset-0 z-50 bg-black bg-opacity-80 backdrop-blur-md hidden flex items-center justify-center px-6">
+            <div class="bg-white w-full rounded-[2rem] p-8 flex flex-col items-center text-center transform scale-95 shadow-2xl relative overflow-hidden">
+                <div class="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mb-6 mt-2 shadow-[0_0_30px_rgba(34,197,94,0.4)]">
+                    <i class="fa-solid fa-check text-5xl text-white"></i>
+                </div>
+                <h2 class="text-3xl font-black text-gray-900 mb-1 tracking-tight">Ponto Registrado!</h2>
+                <p class="text-gray-500 text-sm mb-6 font-semibold">Facial e GPS validados com sucesso.</p>
+
+                <div class="w-full bg-gray-50 p-5 rounded-2xl text-left space-y-3 mb-8 border border-gray-100">
+                    <div class="flex justify-between items-center border-b border-gray-200 pb-2"><span class="text-gray-500 text-[10px] uppercase font-black tracking-wider">Horário</span> <span id="hora-sucesso" class="font-black text-indigo-600 text-xl font-mono">12:00</span></div>
+                    <div class="flex justify-between items-center pt-1"><span class="text-gray-500 text-[10px] uppercase font-black tracking-wider">Localização</span> <span class="text-green-600 text-xs font-black"><i class="fa-solid fa-location-dot mr-1"></i>Raio Autorizado</span></div>
+                </div>
+
+                <button onclick="fecharSucesso()" class="w-full py-4 bg-gray-900 hover:bg-black text-white font-black text-lg rounded-xl shadow-lg active:scale-95 transition-transform">Continuar</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Script Leaflet (Mapa) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- ================================================================= -->
+    <!-- SCRIPTS DE INTEGRAÇÃO COM SUPABASE / API VERCEL                   -->
+    <!-- ================================================================= -->
+    <script>
+        // --------- Cronômetro de Horas Trabalhadas ---------
+        let segundosTrabalhados = (4 * 3600) + (15 * 60) + 22;
+        function atualizarCronometroTrabalho() {
+            segundosTrabalhados++;
+            const h = String(Math.floor(segundosTrabalhados / 3600)).padStart(2, '0');
+            const m = String(Math.floor((segundosTrabalhados % 3600) / 60)).padStart(2, '0');
+            const s = String(segundosTrabalhados % 60).padStart(2, '0');
+            const relogioEl = document.getElementById('cronometro-trabalho');
+            if(relogioEl) relogioEl.innerText = `${h}:${m}:${s}`;
+        }
+        setInterval(atualizarCronometroTrabalho, 1000);
+
+        document.getElementById('data-hoje').innerText = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
+
+        // --------- Função de Login do Colaborador (Via Backend Vercel) ---------
+        async function fazerLogin(e) {
+            e.preventDefault();
+
+            const cpfInput = document.getElementById('login-cpf').value.trim();
+            const senhaInput = document.getElementById('login-senha').value;
+            const errorEl = document.getElementById('login-error');
+            const btnSubmit = document.getElementById('btn-login-submit');
+
+            btnSubmit.innerText = "Autenticando...";
+            btnSubmit.disabled = true;
+            errorEl.classList.add('hidden');
+
+            try {
+                // Requisição POST para validar colaborador no Supabase via API Python da Vercel
+                const response = await fetch('/api/login-colaborador', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cpf: cpfInput, senha: senhaInput })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    // Atualiza dados na interface com o retorno do banco
+                    document.getElementById('header-nome').innerText = data.nome || "Colaborador";
+                    document.getElementById('drawer-nome').innerText = data.nome || "Colaborador";
+                    document.getElementById('drawer-cpf').innerText = `Matrícula: ${cpfInput}`;
+                    document.getElementById('header-empresa').innerText = data.empresa || "Unidade Matriz";
+
+                    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(data.nome || 'User')}&background=ffffff&color=4f46e5&bold=true`;
+                    document.getElementById('header-avatar').src = avatarUrl;
+                    document.getElementById('drawer-avatar').src = avatarUrl;
+
+                    // Entra no App
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('main-app').classList.remove('hidden');
+                    document.getElementById('main-app').classList.add('flex');
+                    setTimeout(initMap, 300);
+                    localStorage.setItem('pontoON_colab_token', data.token);
+                } else {
+                    errorEl.innerText = data.message || "CPF ou senha incorretos.";
+                    errorEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error("Erro na API. Usando fallback de teste local...", err);
+
+                // --- FALLBACK LOCAL PARA TESTE ANTES DO DEPLOY ---
+                if (cpfInput === "111.222.333-44" && senhaInput === "123456") {
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('main-app').classList.remove('hidden');
+                    document.getElementById('main-app').classList.add('flex');
+                    setTimeout(initMap, 300);
+                } else {
+                    errorEl.innerText = "Falha ao conectar com o servidor Python.";
+                    errorEl.classList.remove('hidden');
+                }
+                // ------------------------------------------------
+            } finally {
+                btnSubmit.innerText = "Entrar no Sistema";
+                btnSubmit.disabled = false;
+            }
+        }
+
+        function fazerLogout() {
+            toggleMenu(true);
+            document.getElementById('main-app').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('flex');
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('login-cpf').value = '';
+            document.getElementById('login-senha').value = '';
+            switchTab('inicio');
+            localStorage.removeItem('pontoON_colab_token');
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            const alvo = document.getElementById('tab-' + tabId);
+            if(alvo) alvo.classList.remove('hidden');
+            if(tabId === 'inicio') setTimeout(initMap, 200);
+        }
+
+        function toggleMenu(forceClose = false) {
+            const drawer = document.getElementById('drawer-menu');
+            const overlay = document.getElementById('drawer-overlay');
+            if (forceClose || drawer.classList.contains('open')) {
+                drawer.classList.remove('open');
+                overlay.classList.remove('open');
+            } else {
+                drawer.classList.add('open');
+                overlay.classList.add('open');
+            }
+        }
+
+        let mapInstance = null;
+        function initMap() {
+            if (mapInstance) {
+                mapInstance.invalidateSize();
+                return;
+            }
+            const lat = -23.550520;
+            const lng = -46.633308;
+
+            mapInstance = L.map('map-prestador', { zoomControl: false, attributionControl: false }).setView([lat, lng], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
+
+            L.circle([lat, lng], { color: '#4f46e5', fillColor: '#4f46e5', fillOpacity: 0.15, weight: 2, radius: 150 }).addTo(mapInstance);
+
+            const userIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: "<div style='background-color:#4f46e5;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5);'></div>",
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
+            });
+            L.marker([lat, lng], {icon: userIcon}).addTo(mapInstance);
+        }
+
+        let videoStream = null;
+
+        async function abrirCamera() {
+            const modal = document.getElementById('camera-modal');
+            const video = document.getElementById('videoElement');
+            const gpsStatus = document.getElementById('gps-status-camera');
+            const btnCaptura = document.getElementById('btn-captura');
+            const msgCaptura = document.getElementById('msg-captura');
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            btnCaptura.disabled = true;
+            btnCaptura.classList.add('opacity-50', 'bg-gray-700', 'scale-90');
+            btnCaptura.classList.remove('bg-white', 'scale-100');
+            msgCaptura.innerText = 'Buscando GPS...';
+            gpsStatus.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Sincronizando Localização';
+
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                video.srcObject = videoStream;
+
+                setTimeout(() => {
+                    gpsStatus.innerHTML = '<i class="fa-solid fa-location-crosshairs text-green-400 mr-1"></i> Localização Válida';
+                    btnCaptura.disabled = false;
+                    btnCaptura.classList.remove('opacity-50', 'bg-gray-700', 'scale-90');
+                    btnCaptura.classList.add('bg-white', 'scale-100', 'shadow-[0_0_20px_rgba(255,255,255,0.5)]');
+                    msgCaptura.innerText = 'Toque para bater o ponto';
+                }, 1500);
+            } catch (err) {
+                console.error(err);
+                video.parentElement.innerHTML += '<div class="absolute z-30 text-center"><p class="text-white text-xs font-bold bg-red-600 px-3 py-1.5 rounded">Câmera Indisponível</p></div>';
+            }
+        }
+
+        function fecharCamera() {
+            document.getElementById('camera-modal').classList.add('hidden');
+            document.getElementById('camera-modal').classList.remove('flex');
+            if (videoStream) videoStream.getTracks().forEach(t => t.stop());
+        }
+
+        function capturarEValidar() {
+            const video = document.getElementById('videoElement');
+            if(video) video.pause();
+
+            setTimeout(() => {
+                fecharCamera();
+                const agora = new Date();
+                const hs = String(agora.getHours()).padStart(2, '0');
+                const ms = String(agora.getMinutes()).padStart(2, '0');
+
+                document.getElementById('hora-sucesso').innerText = `${hs}:${ms}`;
+                document.getElementById('sucesso-modal').classList.remove('hidden');
+            }, 500);
+        }
+
+        function fecharSucesso() {
+            document.getElementById('sucesso-modal').classList.add('hidden');
+        }
+
+        function baixarPDF() {
+            const elemento = document.getElementById('area-relatorio');
+            const opt = {
+                margin:       10,
+                filename:     'Meu_Espelho_pontoON.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(elemento).save();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pontoON - Painel Administrativo da Empresa</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet CSS (Mapas) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- html2pdf (Gerador de PDF) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+
+        .leaflet-container { z-index: 10 !important; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #area-impressao, #area-impressao * { visibility: visible; }
+            #area-impressao { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased">
+
+    <!-- ================================================================= -->
+    <!-- 1. TELA DE LOGIN DO ADMINISTRADOR / EMPRESA (VALIDADO NO MASTER)  -->
+    <!-- ================================================================= -->
+    <div id="auth-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md mx-4 border border-gray-100">
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 mb-3 shadow-inner">
+                    <i class="fa-solid fa-building text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">pontoON <span class="text-indigo-600">Admin</span></h2>
+                <p class="text-sm text-gray-500 mt-1">Acesso exclusivo para Empresas cadastradas no Master</p>
+            </div>
+            <form onsubmit="handleAdminAuth(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">CNPJ ou CPF da Empresa</label>
+                    <input type="text" id="admin-cnpj" required placeholder="00.000.000/0001-00"
+                           class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Senha de Acesso da Empresa</label>
+                    <input type="password" id="admin-password" required placeholder="Sua senha cadastrada..."
+                           class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium">
+                </div>
+                <button type="submit" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md transition">
+                    Entrar no Painel da Empresa
+                </button>
+                <p id="auth-error" class="text-xs text-red-500 text-center hidden mt-2">CNPJ não encontrado no Master ou Senha incorreta.</p>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- 2. APLICAÇÃO PRINCIPAL (OCULTA ATÉ O LOGIN)                       -->
+    <!-- ================================================================= -->
+    <div id="app-container" class="min-h-screen flex flex-col hidden">
+        <!-- HEADER / MENU SUPERIOR & HAMBURGER -->
+        <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-xs">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Logo & Menu Hamburger -->
+                <div class="flex items-center space-x-3">
+                    <button onclick="toggleMobileMenu()" class="md:hidden text-gray-600 hover:text-indigo-600 focus:outline-none p-2">
+                        <i class="fa-solid fa-bars text-xl"></i>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <span class="bg-indigo-600 text-white p-2 rounded-lg font-bold flex items-center justify-center w-9 h-9 shadow-sm">
+                            <i class="fa-solid fa-face-smile"></i>
+                        </span>
+                        <span class="text-xl font-bold tracking-tight text-gray-900">ponto<span class="text-indigo-600">ON</span> <span id="empresa-logada-nome" class="text-xs uppercase bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-semibold ml-1">Empresa</span></span>
+                    </div>
+                </div>
+
+                <!-- Navegação Desktop -->
+                <nav class="hidden md:flex items-center space-x-1 overflow-x-auto py-2">
+                    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn px-3 py-2 rounded-lg text-xs font-medium text-indigo-600 bg-indigo-50 transition whitespace-nowrap"><i class="fa-solid fa-chart-pie mr-1.5"></i>Dashboard</button>
+                    <button onclick="switchTab('funcionarios')" id="nav-funcionarios" class="nav-btn px-3 py-2 rounded-lg text-xs font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50 transition whitespace-nowrap"><i class="fa-solid fa-users mr-1.5"></i>Funcionários</button>
+                    <button onclick="switchTab('configuracoes')" id="nav-configuracoes" class="nav-btn px-3 py-2 rounded-lg text-xs font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50 transition whitespace-nowrap"><i class="fa-solid fa-gear mr-1.5"></i>Configurações</button>
+                    <button onclick="switchTab('geolocalizacao')" id="nav-geolocalizacao" class="nav-btn px-3 py-2 rounded-lg text-xs font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50 transition whitespace-nowrap"><i class="fa-solid fa-map-location-dot mr-1.5"></i>Geolocalização</button>
+                    <button onclick="switchTab('jornadas')" id="nav-jornadas" class="nav-btn px-3 py-2 rounded-lg text-xs font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50 transition whitespace-nowrap"><i class="fa-solid fa-calendar-days mr-1.5"></i>Escalas</button>
+                    <button onclick="switchTab('relatorios')" id="nav-relatorios" class="nav-btn px-3 py-2 rounded-lg text-xs font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50 transition whitespace-nowrap"><i class="fa-solid fa-file-lines mr-1.5"></i>Relatórios</button>
+                    <button onclick="switchTab('helpdesk')" id="nav-helpdesk" class="nav-btn px-3 py-2 rounded-lg text-xs font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50 transition whitespace-nowrap"><i class="fa-solid fa-headset mr-1.5"></i>Helpdesk</button>
+                </nav>
+
+                <!-- Perfil -->
+                <div class="flex items-center space-x-3">
+                    <span class="text-xs text-gray-500 hidden sm:inline" id="empresa-logada-cnpj">CNPJ Validado</span>
+                    <button onclick="logoutAdmin()" class="text-gray-400 hover:text-red-600 p-2 rounded-lg transition" title="Sair"><i class="fa-solid fa-power-off text-lg"></i></button>
+                </div>
+            </div>
+
+            <!-- Menu Mobile Dropdown -->
+            <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-gray-200 px-4 pt-2 pb-4 space-y-1">
+                <button onclick="switchTab('dashboard'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-indigo-600 bg-indigo-50">Dashboard</button>
+                <button onclick="switchTab('funcionarios'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Funcionários</button>
+                <button onclick="switchTab('configuracoes'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Configurações</button>
+                <button onclick="switchTab('geolocalizacao'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Geolocalização</button>
+                <button onclick="switchTab('jornadas'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Jornadas & Escalas</button>
+                <button onclick="switchTab('relatorios'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Relatórios</button>
+                <button onclick="switchTab('helpdesk'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Helpdesk</button>
+            </div>
+        </header>
+
+        <!-- CONTEÚDO PRINCIPAL -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8" id="area-impressao">
+
+            <!-- ===================== 1. DASHBOARD ===================== -->
+            <section id="tab-dashboard" class="tab-content space-y-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Dashboard Operacional</h1>
+                    <p class="text-sm text-gray-500">Visão em tempo real da frequência, reconhecimento facial e status dos dispositivos.</p>
+                </div>
+
+                <!-- INDICADORES -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <div class="bg-white p-4 rounded-xl border shadow-2xs"><span class="text-xs font-semibold text-gray-500 uppercase">Funcionários Ativos</span><div class="text-2xl font-bold text-gray-900 mt-2">124</div></div>
+                    <div class="bg-white p-4 rounded-xl border shadow-2xs"><span class="text-xs font-semibold text-gray-500 uppercase">Presentes Hoje</span><div class="text-2xl font-bold text-emerald-600 mt-2">115</div></div>
+                    <div class="bg-white p-4 rounded-xl border shadow-2xs"><span class="text-xs font-semibold text-gray-500 uppercase">Ausentes</span><div class="text-2xl font-bold text-red-500 mt-2">5</div></div>
+                    <div class="bg-white p-4 rounded-xl border shadow-2xs"><span class="text-xs font-semibold text-gray-500 uppercase">Atrasados</span><div class="text-2xl font-bold text-amber-500 mt-2">4</div></div>
+                    <div class="bg-white p-4 rounded-xl border shadow-2xs"><span class="text-xs font-semibold text-gray-500 uppercase">Horas Trab. Hoje</span><div class="text-2xl font-bold text-gray-900 mt-2">912h</div></div>
+                </div>
+
+                <!-- LISTAS DO DASHBOARD -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-white p-5 rounded-xl border shadow-2xs">
+                        <h3 class="font-bold text-gray-900 text-sm mb-3"><i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>Alertas</h3>
+                        <div class="space-y-2">
+                            <div class="p-3 bg-amber-50 border border-amber-100 rounded-lg text-amber-800 text-xs">
+                                <p class="font-bold">Tentativa fora do raio</p>
+                                <p class="text-amber-700">João Silva tentou bater ponto a 250m da unidade Base.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border shadow-2xs">
+                        <h3 class="font-bold text-gray-900 text-sm mb-3"><i class="fa-solid fa-fingerprint text-indigo-600 mr-2"></i>Últimos Registros de Ponto</h3>
+                        <div class="space-y-2">
+                            <div class="p-2.5 bg-gray-50 border border-gray-100 rounded-lg flex justify-between text-xs">
+                                <div><p class="font-bold text-gray-900">Ana Souza</p><p class="text-gray-500">07:58 - Facial OK</p></div>
+                                <span class="px-2 py-0.5 bg-green-50 text-green-700 rounded font-semibold self-center">Validado</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border shadow-2xs">
+                        <h3 class="font-bold text-gray-900 text-sm mb-3"><i class="fa-solid fa-tablet text-indigo-600 mr-2"></i>Status dos Dispositivos (Facial)</h3>
+                        <div class="space-y-2">
+                            <div class="p-2.5 bg-gray-50 border border-gray-100 rounded-lg flex justify-between text-xs">
+                                <div><p class="font-bold text-gray-900">Tablet Recepção 01</p><p class="text-gray-500">App Prestador v2.4</p></div>
+                                <span class="px-2 py-0.5 bg-green-50 text-green-700 rounded font-semibold self-center">Online</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== 2. FUNCIONÁRIOS ===================== -->
+            <section id="tab-funcionarios" class="tab-content hidden space-y-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Gestão de Funcionários</h1>
+                    <p class="text-sm text-gray-500">Cadastro biométrico, histórico de ponto, correções e abonos.</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl border shadow-2xs">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 pb-2 border-b">Cadastro de Funcionário</h2>
+                    <form onsubmit="event.preventDefault(); alert('Cadastro Realizado!');" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                        <div class="sm:col-span-2 lg:col-span-4 flex items-center space-x-4 mb-2">
+                            <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center border-2 border-dashed border-gray-300 text-gray-400">
+                                <i class="fa-solid fa-camera text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <label class="block font-semibold text-gray-600 mb-1">Foto / Captura Facial *</label>
+                                <input type="file" required class="w-full px-2 py-1.5 border rounded-lg bg-gray-50">
+                            </div>
+                        </div>
+                        <div><label class="block font-semibold text-gray-600 mb-1">CPF / Matrícula *</label><input type="text" placeholder="000.000.000-00" required class="w-full px-3 py-2 border rounded-lg"></div>
+                        <div><label class="block font-semibold text-gray-600 mb-1">Nome Completo *</label><input type="text" placeholder="Nome do colaborador" required class="w-full px-3 py-2 border rounded-lg"></div>
+                        <div><label class="block font-semibold text-gray-600 mb-1">Cargo *</label><input type="text" placeholder="Ex: Operador" required class="w-full px-3 py-2 border rounded-lg"></div>
+                        <div><label class="block font-semibold text-gray-600 mb-1">Setor *</label><input type="text" placeholder="Ex: Atendimento" required class="w-full px-3 py-2 border rounded-lg"></div>
+
+                        <div><label class="block font-semibold text-gray-600 mb-1">Escala</label><select class="w-full px-3 py-2 border rounded-lg"><option>5x2 (Seg a Sex)</option><option>12x36</option></select></div>
+                        <div><label class="block font-semibold text-gray-600 mb-1">Jornada</label><select class="w-full px-3 py-2 border rounded-lg"><option>08:00 às 17:00</option><option>07:00 às 19:00</option></select></div>
+                        <div><label class="block font-semibold text-gray-600 mb-1">Unidade</label><select class="w-full px-3 py-2 border rounded-lg"><option>Unidade Central</option></select></div>
+                        <div><label class="block font-semibold text-gray-600 mb-1">Status</label><select class="w-full px-3 py-2 border rounded-lg"><option value="ativo">Ativo</option><option value="bloqueado">Bloqueado</option></select></div>
+
+                        <div class="sm:col-span-4 flex justify-end mt-2"><button type="submit" class="px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-medium shadow">Salvar Funcionário</button></div>
+                    </form>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl border shadow-2xs space-y-4">
+                    <div class="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                        <div class="flex space-x-2">
+                            <input type="date" class="px-3 py-2 border rounded-lg text-xs" title="Filtro de busca por data">
+                            <button class="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-medium">Filtrar Histórico</button>
+                        </div>
+                        <button onclick="window.print()" class="px-4 py-2 bg-gray-100 rounded-lg text-xs font-medium"><i class="fa-solid fa-print mr-1"></i>Imprimir Histórico / Lista</button>
+                    </div>
+
+                    <div class="overflow-x-auto border rounded-lg">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-gray-50 border-b text-gray-600 uppercase font-semibold">
+                                <tr>
+                                    <th class="p-3">Foto/Facial</th>
+                                    <th class="p-3">CPF/Matrícula</th>
+                                    <th class="p-3">Nome Completo</th>
+                                    <th class="p-3">Cargo / Setor</th>
+                                    <th class="p-3">Escala / Jornada</th>
+                                    <th class="p-3">Unidade</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3 text-right">Ações Rápidas</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="p-3"><img src="https://ui-avatars.com/api/?name=Ana+Souza&background=c7d2fe&color=3730a3" class="w-8 h-8 rounded-full"></td>
+                                    <td class="p-3 font-mono">111.222.333-44</td>
+                                    <td class="p-3 font-bold text-gray-900">Ana Souza</td>
+                                    <td class="p-3">Caixa<br><span class="text-gray-500">Atendimento</span></td>
+                                    <td class="p-3">5x2<br><span class="text-gray-500">08h-17h</span></td>
+                                    <td class="p-3">Central</td>
+                                    <td class="p-3"><span class="px-2 py-0.5 bg-green-50 text-green-700 rounded font-semibold">Ativo</span></td>
+                                    <td class="p-3 text-right space-x-1 whitespace-nowrap">
+                                        <button onclick="openModal('modal-abono')" title="Correções/Abonos" class="px-2 py-1.5 bg-emerald-50 text-emerald-600 rounded"><i class="fa-solid fa-business-time"></i></button>
+                                        <button onclick="openModal('modal-edicao-funcionario')" title="Alterar/Editar" class="px-2 py-1.5 bg-blue-50 text-blue-600 rounded"><i class="fa-solid fa-pen"></i></button>
+                                        <button title="Visualizar / Imprimir Registro" class="px-2 py-1.5 bg-gray-100 text-gray-700 rounded"><i class="fa-solid fa-print"></i></button>
+                                        <button onclick="if(confirm('Excluir?')) alert('Excluído.')" title="Excluir" class="px-2 py-1.5 bg-red-50 text-red-600 rounded"><i class="fa-solid fa-trash"></i></button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== 4. CONFIGURAÇÕES ===================== -->
+            <section id="tab-configuracoes" class="tab-content hidden space-y-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Configurações Gerais</h1>
+                    <p class="text-sm text-gray-500">Parametrização completa do sistema pontoON.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-xs">
+                    <div class="bg-white p-5 rounded-xl border shadow-2xs space-y-3">
+                        <h3 class="font-bold text-gray-900 text-sm border-b pb-2">Tolerância / Validação</h3>
+                        <label class="block font-semibold text-gray-600">Raio permitido para bater ponto (m)</label>
+                        <p class="text-gray-500 mb-2">Raio atual: 150 metros</p>
+                        <div class="flex space-x-2">
+                            <input type="number" value="150" class="flex-1 px-3 py-2 border rounded-lg">
+                            <button class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Alterar</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl border shadow-2xs space-y-3">
+                        <h3 class="font-bold text-gray-900 text-sm border-b pb-2">Envio Automático de Relatórios</h3>
+                        <label class="block font-semibold text-gray-600">Email Destino</label>
+                        <input type="email" value="rh@empresa.com" class="w-full px-3 py-2 border rounded-lg">
+                        <label class="block font-semibold text-gray-600">Data/Hora</label>
+                        <input type="text" value="Todo dia 01 às 06:00" class="w-full px-3 py-2 border rounded-lg">
+                        <div class="flex justify-between items-center mt-2">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" checked class="rounded text-indigo-600 border-gray-300">
+                                <span class="font-semibold text-gray-700">Ativado</span>
+                            </label>
+                            <button class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Alterar</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl border shadow-2xs space-y-3">
+                        <h3 class="font-bold text-gray-900 text-sm border-b pb-2">Unidades</h3>
+                        <div class="p-2 bg-gray-50 border rounded flex justify-between items-center">
+                            <span>Unidade Matriz - SP</span>
+                            <div class="space-x-1"><button class="text-blue-600 hover:underline">Alterar</button><button class="text-red-600 hover:underline">Excluir</button></div>
+                        </div>
+                        <input type="text" placeholder="Nova unidade..." class="w-full px-3 py-2 border rounded-lg mt-2">
+                        <button class="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Adicionar Unidade</button>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl border shadow-2xs space-y-3">
+                        <h3 class="font-bold text-gray-900 text-sm border-b pb-2">Jornada Padrão</h3>
+                        <div class="p-2 bg-gray-50 border rounded flex justify-between items-center">
+                            <span>08h00 às 18h00</span>
+                            <div class="space-x-1"><button class="text-blue-600 hover:underline">Alterar</button><button class="text-red-600 hover:underline">Excluir</button></div>
+                        </div>
+                        <input type="text" placeholder="Cadastrar nova jornada..." class="w-full px-3 py-2 border rounded-lg mt-2">
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl border shadow-2xs space-y-3">
+                        <h3 class="font-bold text-gray-900 text-sm border-b pb-2">Regras de Ponto</h3>
+                        <div class="p-2 bg-gray-50 border rounded flex justify-between items-center">
+                            <span>Tolerância de atraso: 10 min</span>
+                            <div class="space-x-1"><button class="text-blue-600 hover:underline">Alterar</button><button class="text-red-600 hover:underline">Excluir</button></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl border shadow-2xs space-y-3">
+                        <h3 class="font-bold text-gray-900 text-sm border-b pb-2">Locais de Geolocalização</h3>
+                        <div class="p-2 bg-gray-50 border rounded flex flex-col gap-1">
+                            <span class="font-bold text-gray-700">Matriz SP</span>
+                            <span class="text-gray-500">Lat: -23.5505 / Lng: -46.6333</span>
+                        </div>
+                        <button class="w-full px-4 py-2 border border-dashed border-gray-300 text-gray-600 rounded-lg mt-2">Adicionar Novo Local</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== 5. GEOLOCALIZAÇÃO ===================== -->
+            <section id="tab-geolocalizacao" class="tab-content hidden space-y-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Mapa das Unidades e Cerca Virtual</h1>
+                    <p class="text-sm text-gray-500">Acompanhe locais de registro, áreas autorizadas e histórico de tentativas.</p>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border shadow-2xs">
+                    <div id="map" class="h-[400px] w-full rounded-lg border border-gray-300 z-10 relative"></div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl border shadow-2xs">
+                    <h3 class="font-bold text-gray-900 text-sm mb-4">Histórico de Localização associado ao ponto</h3>
+                    <table class="w-full text-left text-xs border rounded-lg">
+                        <thead class="bg-gray-50 border-b">
+                            <tr><th class="p-3">Funcionário</th><th class="p-3">Data/Hora</th><th class="p-3">Coordenadas</th><th class="p-3">Status</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td class="p-3 font-bold text-gray-900">Ana Souza</td><td class="p-3">Hoje, 07:58</td><td class="p-3">-23.5505, -46.6333</td><td class="p-3"><span class="px-2 py-1 bg-green-50 text-green-700 font-bold rounded">DENTRO da área</span></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ===================== 6. JORNADAS E ESCALAS ===================== -->
+            <section id="tab-jornadas" class="tab-content hidden space-y-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Jornadas e Escalas (Busca de Prestador)</h1>
+                    <p class="text-sm text-gray-500">Localize colaboradores e faça o gerenciamento de suas escalas específicas.</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl border shadow-2xs">
+                    <div class="flex space-x-2 mb-6">
+                        <input type="text" placeholder="Campo de busca (Nome ou CPF)..." class="flex-1 px-4 py-3 border rounded-lg text-sm bg-gray-50">
+                        <button class="px-6 py-3 bg-indigo-600 text-white rounded-lg text-sm font-medium">Buscar</button>
+                    </div>
+                    <table class="w-full text-left text-xs border rounded-lg">
+                        <thead class="bg-gray-50 border-b">
+                            <tr><th class="p-3">Nome</th><th class="p-3">CPF</th><th class="p-3">Status</th><th class="p-3">Escala</th><th class="p-3 text-right">Ações</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="p-3 font-bold">João Silva</td><td class="p-3">123.456.789-00</td><td class="p-3"><span class="px-2 py-0.5 bg-green-50 text-green-700 rounded font-semibold">Ativo</span></td><td class="p-3">12x36</td>
+                                <td class="p-3 text-right"><button onclick="openModal('modal-escala')" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded">Editar</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ===================== 7. RELATÓRIOS ===================== -->
+            <section id="tab-relatorios" class="tab-content hidden space-y-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Central de Relatórios</h1>
+                    <p class="text-sm text-gray-500">Exporte documentos completos do ponto, bancos de horas e ocorrências.</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl border shadow-2xs space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                        <div><label class="block font-semibold mb-1">Tipo</label><select class="w-full px-3 py-2 border rounded"><option>Espelho de Ponto</option></select></div>
+                        <div><label class="block font-semibold mb-1">Funcionário</label><select class="w-full px-3 py-2 border rounded"><option>Todos</option></select></div>
+                        <div><label class="block font-semibold mb-1">Período</label><input type="month" class="w-full px-3 py-2 border rounded"></div>
+                        <div class="flex items-end space-x-2">
+                            <button onclick="gerarPDF()" class="flex-1 px-3 py-2 bg-red-600 text-white rounded font-medium"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>
+                            <button onclick="gerarCSV()" class="flex-1 px-3 py-2 bg-emerald-600 text-white rounded font-medium"><i class="fa-solid fa-file-excel mr-1"></i>Excel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl border shadow-2xs overflow-hidden">
+                    <h3 class="font-bold text-gray-900 text-sm mb-4">Prévia</h3>
+                    <div id="relatorio-preview" class="p-6 border rounded-lg text-xs bg-white">
+                        <div class="text-center mb-6">
+                            <h2 class="text-xl font-bold uppercase">Espelho de Ponto Eletrônico</h2>
+                            <p class="text-gray-600 mt-1" id="preview-empresa-info">Empresa Cadastrada no Master</p>
+                        </div>
+                        <table class="w-full text-left border-collapse border border-gray-400">
+                            <thead><tr class="bg-gray-100"><th class="border border-gray-400 p-2 text-center">Data</th><th class="border border-gray-400 p-2 text-center">Entrada</th><th class="border border-gray-400 p-2 text-center">Saída</th><th class="border border-gray-400 p-2 text-center">Total</th></tr></thead>
+                            <tbody><tr><td class="border border-gray-400 p-2 text-center">01/09</td><td class="border border-gray-400 p-2 text-center">08:00</td><td class="border border-gray-400 p-2 text-center">17:00</td><td class="border border-gray-400 p-2 text-center">08:00</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== 8. HELPDESK ===================== -->
+            <section id="tab-helpdesk" class="tab-content hidden space-y-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Helpdesk e Suporte</h1>
+                        <p class="text-sm text-gray-500">Abertura e acompanhamento de solicitações enviadas ao Master.</p>
+                    </div>
+                    <button onclick="openModal('modal-chamado')" class="px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium shadow"><i class="fa-solid fa-plus mr-2"></i>Nova Solicitação</button>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl border shadow-2xs">
+                    <h2 class="font-bold text-gray-900 mb-4 border-b pb-2">Chamados Registrados</h2>
+                    <div class="p-4 border rounded-lg bg-gray-50 flex justify-between items-center">
+                        <div><h3 class="font-bold text-gray-900 text-sm">Problema no reconhecimento facial</h3><p class="text-xs text-gray-500">Aberto hoje</p></div>
+                        <span class="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full">Em Atendimento</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ================== MODAIS ================== -->
+    <div id="modal-edicao-funcionario" class="modal-ui fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl mx-4 text-xs">
+            <h3 class="font-bold text-gray-900 text-lg border-b pb-2 mb-4">Editar Cadastro</h3>
+            <div class="flex justify-end space-x-2 mt-6">
+                <button onclick="closeModal('modal-edicao-funcionario')" class="px-4 py-2 border rounded">Cancelar</button>
+                <button onclick="alert('Salvo!'); closeModal('modal-edicao-funcionario')" class="px-4 py-2 bg-indigo-600 text-white rounded">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-abono" class="modal-ui fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 text-xs">
+            <h3 class="font-bold text-gray-900 text-lg border-b pb-2 mb-4">Abono</h3>
+            <div class="flex justify-end space-x-2 mt-6"><button onclick="closeModal('modal-abono')" class="px-4 py-2 border rounded">Fechar</button></div>
+        </div>
+    </div>
+
+    <div id="modal-escala" class="modal-ui fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 text-xs">
+            <h3 class="font-bold text-gray-900 text-lg border-b pb-2 mb-4">Escala</h3>
+            <div class="flex justify-end space-x-2 mt-6"><button onclick="closeModal('modal-escala')" class="px-4 py-2 border rounded">Fechar</button></div>
+        </div>
+    </div>
+
+    <div id="modal-chamado" class="modal-ui fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 text-xs">
+            <h3 class="font-bold text-gray-900 text-lg border-b pb-2 mb-4">Novo Chamado</h3>
+            <div class="space-y-4"><textarea rows="4" class="w-full border p-2 rounded" placeholder="Descrição..."></textarea></div>
+            <div class="flex justify-end space-x-2 mt-6"><button onclick="closeModal('modal-chamado')" class="px-4 py-2 border rounded">Enviar</button></div>
+        </div>
+    </div>
+
+    <!-- Script Leaflet -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- ================== LÓGICA DE VALIDAÇÃO MASTER / SUPABASE ================== -->
+    <script>
+        async function handleAdminAuth(event) {
+            event.preventDefault();
+
+            const cnpjInput = document.getElementById('admin-cnpj').value.trim();
+            const senhaInput = document.getElementById('admin-password').value;
+            const errorEl = document.getElementById('auth-error');
+            const btnSubmit = event.target.querySelector('button[type="submit"]');
+
+            btnSubmit.innerText = "Validando no Banco Master...";
+            btnSubmit.disabled = true;
+            errorEl.classList.add('hidden');
+
+            try {
+                // Rota do Backend Python (Vercel) que checa se o CNPJ e senha constam na tabela do Supabase cadastrada pelo Master
+                const response = await fetch('/api/login-admin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cnpj: cnpjInput, senha: senhaInput })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    // Libera acesso e injeta dados da empresa autenticada
+                    document.getElementById('auth-modal').classList.add('hidden');
+                    document.getElementById('app-container').classList.remove('hidden');
+                    document.getElementById('empresa-logada-nome').innerText = data.nome_fantasia || "Empresa Ativa";
+                    document.getElementById('empresa-logada-cnpj').innerText = cnpjInput;
+                    document.getElementById('preview-empresa-info').innerText = `Empresa: ${data.nome_fantasia || 'Cliente'} | CNPJ: ${cnpjInput}`;
+                    localStorage.setItem('pontoON_admin_token', data.token);
+                } else {
+                    errorEl.innerText = data.message || "CNPJ não cadastrado pelo Master ou senha incorreta.";
+                    errorEl.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error("Erro na API da Vercel. Modo de teste local ativado...", error);
+
+                // --- FALLBACK LOCAL PARA TESTE ANTES DO DEPLOY ---
+                if (cnpjInput === "12.345.678/0001-99" && senhaInput === "123456") {
+                    document.getElementById('auth-modal').classList.add('hidden');
+                    document.getElementById('app-container').classList.remove('hidden');
+                    document.getElementById('empresa-logada-nome').innerText = "Posto Alfa";
+                    document.getElementById('empresa-logada-cnpj').innerText = cnpjInput;
+                } else {
+                    errorEl.innerText = "Empresa não encontrada no banco Master ou dados incorretos.";
+                    errorEl.classList.remove('hidden');
+                }
+                // ------------------------------------------------
+            } finally {
+                btnSubmit.innerText = "Entrar no Painel da Empresa";
+                btnSubmit.disabled = false;
+            }
+        }
+
+        function logoutAdmin() {
+            document.getElementById('auth-modal').classList.remove('hidden');
+            document.getElementById('app-container').classList.add('hidden');
+            document.getElementById('admin-cnpj').value = '';
+            document.getElementById('admin-password').value = '';
+            localStorage.removeItem('pontoON_admin_token');
+        }
+
+        let mapInstance = null;
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-indigo-600', 'bg-indigo-50');
+                btn.classList.add('text-gray-600');
+            });
+
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+            const activeBtn = document.getElementById('nav-' + tabId);
+            if(activeBtn) {
+                activeBtn.classList.remove('text-gray-600');
+                activeBtn.classList.add('text-indigo-600', 'bg-indigo-50');
+            }
+
+            if (tabId === 'geolocalizacao') {
+                setTimeout(initMap, 200);
+            }
+        }
+
+        function toggleMobileMenu() {
+            document.getElementById('mobile-menu').classList.toggle('hidden');
+        }
+
+        function openModal(modalId) { document.getElementById(modalId).classList.remove('hidden'); }
+        function closeModal(modalId) { document.getElementById(modalId).classList.add('hidden'); }
+
+        function initMap() {
+            if (mapInstance) {
+                mapInstance.invalidateSize();
+                return;
+            }
+
+            const lat = -23.550520;
+            const lng = -46.633308;
+
+            mapInstance = L.map('map').setView([lat, lng], 16);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap pontoON'
+            }).addTo(mapInstance);
+
+            L.marker([lat, lng]).addTo(mapInstance).bindPopup('<b>Unidade Matriz</b><br>Raio: 150m.').openPopup();
+
+            L.circle([lat, lng], {
+                color: 'indigo',
+                fillColor: '#4f46e5',
+                fillOpacity: 0.2,
+                radius: 150
+            }).addTo(mapInstance);
+        }
+
+        function gerarPDF() {
+            const element = document.getElementById('relatorio-preview');
+            const opt = {
+                margin:       10,
+                filename:     'Espelho_de_Ponto_pontoON.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        function gerarCSV() {
+            const rows = [
+                ["Data", "Entrada", "Saida", "Total"],
+                ["01/09/2026", "08:00", "17:00", "08:00"]
+            ];
+            let csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "Relatorio_pontoON.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

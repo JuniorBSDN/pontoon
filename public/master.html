@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pontoON - Master Dashboard</title>
+    <!-- Tailwind CSS para estilização rápida e responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased">
+
+    <!-- AUTENTICAÇÃO SIMPLES (PROMPT / MODAL INICIAL) -->
+    <div id="auth-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md mx-4 border border-gray-100">
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 text-indigo-600 mb-3 shadow-inner">
+                    <i class="fa-solid fa-fingerprint text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">pontoON</h2>
+                <p class="text-sm text-gray-500 mt-1">Módulo Master - Acesso Restrito</p>
+            </div>
+            <form id="auth-form" onsubmit="handleAuth(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Senha de Autenticação Master</label>
+                    <input type="password" id="master-password" required placeholder="Digite a senha master..."
+                           class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition text-sm">
+                </div>
+                <button type="submit" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-md transition duration-200">
+                    Acessar Sistema
+                </button>
+                <p id="auth-error" class="text-xs text-red-500 text-center hidden mt-2">Senha incorreta. Tente novamente.</p>
+            </form>
+        </div>
+    </div>
+
+    <!-- APLICAÇÃO PRINCIPAL -->
+    <div id="app-container" class="min-h-screen flex flex-col hidden">
+
+        <!-- HEADER / MENU SUPERIOR & HAMBURGER -->
+        <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-xs">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Logo & Hamburger para Mobile -->
+                <div class="flex items-center space-x-3">
+                    <button onclick="toggleMobileMenu()" class="md:hidden text-gray-600 hover:text-indigo-600 focus:outline-none p-2">
+                        <i class="fa-solid fa-bars text-xl"></i>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <span class="bg-indigo-600 text-white p-2 rounded-lg font-bold flex items-center justify-center w-9 h-9 shadow-sm">
+                            <i class="fa-solid fa-clock"></i>
+                        </span>
+                        <span class="text-xl font-bold tracking-tight text-gray-900">ponto<span class="text-indigo-600">ON</span> <span class="text-xs uppercase bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold ml-1">Master</span></span>
+                    </div>
+                </div>
+
+                <!-- Navegação Desktop -->
+                <nav class="hidden md:flex items-center space-x-1">
+                    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn px-4 py-2 rounded-lg text-sm font-medium text-indigo-600 bg-indigo-50 transition">
+                        <i class="fa-solid fa-chart-pie mr-2"></i>Dashboard
+                    </button>
+                    <button onclick="switchTab('clientes')" id="nav-clientes" class="nav-btn px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50 transition">
+                        <i class="fa-solid fa-building mr-2"></i>Novo Cliente / Empresas
+                    </button>
+                    <button onclick="switchTab('helpdesk')" id="nav-helpdesk" class="nav-btn px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-indigo-600 hover:bg-gray-50 transition">
+                        <i class="fa-solid fa-headset mr-2"></i>Helpdesk & OS
+                    </button>
+                </nav>
+
+                <!-- Perfil / Logout -->
+                <div class="flex items-center space-x-3">
+                    <span class="text-xs text-gray-500 hidden sm:inline">Ambiente Seguro</span>
+                    <button onclick="logout()" class="text-gray-400 hover:text-red-600 p-2 rounded-lg transition" title="Sair">
+                        <i class="fa-solid fa-power-off text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Menu Hamburger Dropdown (Mobile) -->
+            <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-gray-200 px-4 pt-2 pb-4 space-y-1">
+                <button onclick="switchTab('dashboard'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-indigo-600 bg-indigo-50">
+                    <i class="fa-solid fa-chart-pie mr-2"></i>Dashboard
+                </button>
+                <button onclick="switchTab('clientes'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
+                    <i class="fa-solid fa-building mr-2"></i>Novo Cliente / Empresas
+                </button>
+                <button onclick="switchTab('helpdesk'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">
+                    <i class="fa-solid fa-headset mr-2"></i>Helpdesk & OS
+                </button>
+            </div>
+        </header>
+
+        <!-- CONTEÚDO PRINCIPAL -->
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+            <!-- 1.1 DASHBOARD -->
+            <section id="tab-dashboard" class="tab-content space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Dashboard Geral</h1>
+                        <p class="text-sm text-gray-500">Monitoramento de infraestrutura, clientes e chamados de suporte.</p>
+                    </div>
+                    <div class="flex items-center space-x-2 text-xs bg-white p-2 rounded-lg border border-gray-200 shadow-2xs">
+                        <span class="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+                        <span class="text-gray-600 font-medium">Sistema Operacional (Relatórios automáticos ativos)</span>
+                    </div>
+                </div>
+
+                <!-- INDICADORES -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <!-- Status DB Disk -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-2xs flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-gray-500 mb-2">
+                            <span class="text-xs font-semibold uppercase tracking-wider">Status DB Disk</span>
+                            <i class="fa-solid fa-database text-indigo-500"></i>
+                        </div>
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-3xl font-bold text-gray-900">42%</span>
+                            <span class="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded">Saudável</span>
+                        </div>
+                        <div class="w-full bg-gray-100 rounded-full h-1.5 mt-4">
+                            <div class="bg-indigo-600 h-1.5 rounded-full" style="width: 42%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Total Clientes Ativos/Bloqueados -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-2xs flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-gray-500 mb-2">
+                            <span class="text-xs font-semibold uppercase tracking-wider">Total Clientes</span>
+                            <i class="fa-solid fa-users text-indigo-500"></i>
+                        </div>
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-3xl font-bold text-gray-900">128</span>
+                            <div class="text-xs text-right space-x-1">
+                                <span class="text-green-600 font-medium">120 Ativos</span> /
+                                <span class="text-red-500 font-medium">8 Bloq.</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-4">Base total consolidada</div>
+                    </div>
+
+                    <!-- Total Geral Clientes -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-2xs flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-gray-500 mb-2">
+                            <span class="text-xs font-semibold uppercase tracking-wider">Status Geral</span>
+                            <i class="fa-solid fa-chart-line text-indigo-500"></i>
+                        </div>
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-3xl font-bold text-gray-900">100%</span>
+                            <span class="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Sincronizado</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-4">Nós de reconhecimento facial ok</div>
+                    </div>
+
+                    <!-- Receita -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-2xs flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-gray-500 mb-2">
+                            <span class="text-xs font-semibold uppercase tracking-wider">Receita Mensal (MRR)</span>
+                            <i class="fa-solid fa-wallet text-indigo-500"></i>
+                        </div>
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-3xl font-bold text-gray-900">R$ 45.8k</span>
+                            <span class="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded">+12% vs mês ant.</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-4">Faturamento automatizado por PIX</div>
+                    </div>
+                </div>
+
+                <!-- LISTA DE AVISOS E ALERTAS -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Vencimento de Clientes -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-2xs">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-gray-900 text-sm flex items-center">
+                                <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2"></i>Vencimento de Clientes
+                            </h3>
+                            <span class="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-semibold">3 Próximos</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-xs">
+                                <div>
+                                    <p class="font-bold text-gray-800">Posto de Gasolina Alfa Ltda</p>
+                                    <p class="text-gray-500">Vence em: 12/09/2026</p>
+                                </div>
+                                <button onclick="alert('Notificação de pagamento enviada ou PIX gerado!')" class="px-3 py-1.5 bg-indigo-600 text-white rounded font-medium hover:bg-indigo-700 transition">OK</button>
+                            </div>
+                            <div class="p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-xs">
+                                <div>
+                                    <p class="font-bold text-gray-800">Supermercado Beta</p>
+                                    <p class="text-gray-500">Vence em: 15/09/2026</p>
+                                </div>
+                                <button onclick="alert('Notificação enviada!')" class="px-3 py-1.5 bg-indigo-600 text-white rounded font-medium hover:bg-indigo-700 transition">OK</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Solicitações de Suporte Helpdesk -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-2xs">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-gray-900 text-sm flex items-center">
+                                <i class="fa-solid fa-headset text-indigo-500 mr-2"></i>Helpdesk & Suporte
+                            </h3>
+                            <span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-semibold">2 Chamados</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-xs">
+                                <div>
+                                    <p class="font-bold text-gray-800">Erro na câmera - Unid. Centro</p>
+                                    <p class="text-gray-500">Cliente: Indústria Gama</p>
+                                </div>
+                                <button onclick="gerarOrdemServico('Indústria Gama - Erro Câmera')" class="px-3 py-1.5 bg-emerald-600 text-white rounded font-medium hover:bg-emerald-700 transition">Gerar OS</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Aviso Prévio de Estouro do DB -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-2xs">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-gray-900 text-sm flex items-center">
+                                <i class="fa-solid fa-server text-red-500 mr-2"></i>Alerta de Banco de Dados
+                            </h3>
+                            <span class="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded font-semibold">Normal</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-xs">
+                                <div>
+                                    <p class="font-bold text-gray-800">Partição Principal - pontoON</p>
+                                    <p class="text-gray-500">Uso atual: 42% (Limite crítico: 85% absurdo)</p>
+                                </div>
+                                <button onclick="verificarDatabase()" class="px-3 py-1.5 bg-gray-800 text-white rounded font-medium hover:bg-gray-900 transition">Verificar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 1.2 NOVO CLIENTE / GERENCIAMENTO DE EMPRESAS -->
+            <section id="tab-clientes" class="tab-content hidden space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Gestão de Clientes e Empresas</h1>
+                        <p class="text-sm text-gray-500">Cadastre novos clientes, controle pagamentos via carimbo e gere contratos digitais.</p>
+                    </div>
+                </div>
+
+                <!-- CADASTRO DE NOVO CLIENTE / EMPRESA (FORMULÁRIO) -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-2xs">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100 flex items-center">
+                        <i class="fa-solid fa-building-circle-check text-indigo-600 mr-2"></i>Cadastro de Nova Empresa / Cliente
+                    </h2>
+                    <form id="form-novo-cliente" onsubmit="salvarNovoCliente(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Razão Social</label>
+                            <input type="text" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Ex: Empresa Exemplo Ltda">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nome Fantasia</label>
+                            <input type="text" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Ex: pontoON Cliente">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">CNPJ</label>
+                            <input type="text" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="00.000.000/0001-00">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Responsável</label>
+                            <input type="text" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Nome do Gestor">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Contato (Telefone)</label>
+                            <input type="text" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="(00) 00000-0000">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Email (Relatórios Automáticos)</label>
+                            <input type="email" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="cliente@email.com">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Endereço Completo</label>
+                            <input type="text" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Rua, Número, Bairro, Cidade - UF">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Plano Contratado</label>
+                            <select class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                                <option>Plano Standard (Facial + Relatórios)</option>
+                                <option>Plano Enterprise (Multi-unidades)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Data de Contratação</label>
+                            <input type="date" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Vencimento</label>
+                            <input type="date" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Quantidade de Usuários</label>
+                            <input type="number" value="50" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Quantidade de Unidades</label>
+                            <input type="number" value="1" required class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Status Inicial</label>
+                            <select class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                                <option value="pendente">Pendente (Aguardando Carimbo)</option>
+                                <option value="ativo">Ativo</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-3 flex justify-end mt-2">
+                            <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm shadow-sm transition">
+                                Cadastrar Empresa
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- BUSCAR EMPRESA E LISTA -->
+                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-2xs space-y-4">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div class="flex-1 flex items-center space-x-2">
+                            <div class="relative flex-1">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                                    <i class="fa-solid fa-search"></i>
+                                </span>
+                                <input type="text" id="filtro-busca" placeholder="Filtrar por nome fantasia ou CNPJ..."
+                                       class="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                            </div>
+                            <button onclick="imprimirListaEmpresas()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition flex items-center">
+                                <i class="fa-solid fa-print mr-2"></i>Imprimir Lista
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TABELA DE EMPRESAS -->
+                    <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase tracking-wider">
+                                    <th class="p-3 font-semibold">Nome de Fantasia</th>
+                                    <th class="p-3 font-semibold">CNPJ / CPF</th>
+                                    <th class="p-3 font-semibold">Status</th>
+                                    <th class="p-3 font-semibold text-right">Ações Rápidas & Gestão</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                <!-- Linha Exemplo 1 -->
+                                <tr class="hover:bg-gray-50 transition">
+                                    <td class="p-3 font-medium text-gray-900">Posto Alfa</td>
+                                    <td class="p-3 text-gray-500">12.345.678/0001-99</td>
+                                    <td class="p-3">
+                                        <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-50 text-green-700">Ativo</span>
+                                    </td>
+                                    <td class="p-3 text-right space-x-1">
+                                        <!-- Carimbo de pagamento -->
+                                        <button onclick="carimboPagamento('Posto Alfa')" title="Carimbo de Pagamento (Ativa cliente)" class="p-1.5 bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-100 transition">
+                                            <i class="fa-solid fa-stamp"></i>
+                                        </button>
+                                        <!-- Enviar Recibo Automático -->
+                                        <button onclick="enviarReciboEmail('Posto Alfa')" title="Enviar Recibo por Email" class="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition">
+                                            <i class="fa-solid fa-envelope-circle-check"></i>
+                                        </button>
+                                        <!-- Ativar / Desativar -->
+                                        <button onclick="toggleStatusCliente('Posto Alfa')" title="Ativar/Desativar" class="p-1.5 bg-amber-50 text-amber-600 rounded hover:bg-amber-100 transition">
+                                            <i class="fa-solid fa-ban"></i>
+                                        </button>
+                                        <!-- Gerar PIX -->
+                                        <button onclick="gerarPixModal('Posto Alfa')" title="Gerar PIX de Vencimento" class="p-1.5 bg-purple-50 text-purple-600 rounded hover:bg-purple-100 transition">
+                                            <i class="fa-solid fa-qrcode"></i>
+                                        </button>
+                                        <!-- Gerar Contrato -->
+                                        <button onclick="gerarContratoModal('Posto Alfa')" title="Gerar Contrato Editável" class="p-1.5 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition">
+                                            <i class="fa-solid fa-file-contract"></i>
+                                        </button>
+                                        <!-- Histórico de Pagamentos -->
+                                        <button onclick="visualizarHistorico('Posto Alfa')" title="Visualizar Histórico de Pagamentos" class="p-1.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition">
+                                            <i class="fa-solid fa-clock-rotate-left"></i>
+                                        </button>
+                                        <!-- Editar -->
+                                        <button onclick="abrirModalEdicao('Posto Alfa')" title="Editar dados" class="p-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition">
+                                            <i class="fa-solid fa-pen"></i>
+                                        </button>
+                                        <!-- Excluir -->
+                                        <button onclick="excluirEmpresa('Posto Alfa')" title="Excluir" class="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 transition">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 1.3 HELPDESK & SUPORTE -->
+            <section id="tab-helpdesk" class="tab-content hidden space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Módulo Helpdesk & Ordens de Serviço</h1>
+                        <p class="text-sm text-gray-500">Gerenciamento centralizado de ocorrências das unidades com reconhecimento facial.</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-2xs space-y-4">
+                    <h2 class="text-lg font-bold text-gray-900 mb-2">Chamados em Aberto</h2>
+                    <div class="space-y-3">
+                        <div class="p-4 border border-gray-200 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            <div>
+                                <span class="text-xs bg-red-50 text-red-600 font-semibold px-2 py-0.5 rounded">Urgente</span>
+                                <h3 class="font-bold text-gray-900 mt-1">Falha na Sincronização Facial - Unidade Sul</h3>
+                                <p class="text-xs text-gray-500 mt-0.5">Cliente: Supermercado Beta | Aberto há 2 horas</p>
+                            </div>
+                            <button onclick="gerarOrdemServico('Supermercado Beta - Sincronização Facial')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition flex items-center justify-center">
+                                <i class="fa-solid fa-file-invoice mr-2"></i>Gerar Ordem de Serviço
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- MODAL DE EDIÇÃO DE CLIENTE -->
+    <div id="modal-edicao" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
+                <h3 class="font-bold text-gray-900 text-lg">Editar Dados da Empresa / Cliente</h3>
+                <button onclick="fecharModalEdicao()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <form onsubmit="salvarEdicao(event)" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Razão Social</label>
+                        <input type="text" id="edit-razao" class="w-full px-3 py-2 border rounded-lg text-sm" value="Posto de Gasolina Alfa Ltda">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nome Fantasia</label>
+                        <input type="text" id="edit-fantasia" class="w-full px-3 py-2 border rounded-lg text-sm" value="Posto Alfa">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">CNPJ</label>
+                        <input type="text" id="edit-cnpj" class="w-full px-3 py-2 border rounded-lg text-sm" value="12.345.678/0001-99">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Responsável</label>
+                        <input type="text" id="edit-resp" class="w-full px-3 py-2 border rounded-lg text-sm" value="Carlos Silva">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Contato</label>
+                        <input type="text" id="edit-contato" class="w-full px-3 py-2 border rounded-lg text-sm" value="(11) 98888-7777">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Email</label>
+                        <input type="email" id="edit-email" class="w-full px-3 py-2 border rounded-lg text-sm" value="contato@postoalfa.com">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Endereço</label>
+                        <input type="text" id="edit-endereco" class="w-full px-3 py-2 border rounded-lg text-sm" value="Av. Paulista, 1000 - São Paulo/SP">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-2 pt-4">
+                    <button type="button" onclick="fecharModalEdicao()" class="px-4 py-2 border rounded-lg text-sm text-gray-600">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONTRATO DIGITAL EDITÁVEL -->
+    <div id="modal-contrato" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
+                <h3 class="font-bold text-gray-900 text-lg">Contrato de Prestação de Serviços - pontoON</h3>
+                <button onclick="fecharModalContrato()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="space-y-4">
+                <p class="text-xs text-gray-500">O contrato abaixo é totalmente editável antes do envio automático para confirmação do cliente.</p>
+                <textarea id="texto-contrato" rows="12" class="w-full p-3 border border-gray-300 rounded-lg text-xs font-mono leading-relaxed outline-none focus:ring-2 focus:ring-indigo-500">CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE PONTO ELETRÔNICO COM RECONHECIMENTO FACIAL - pontoON
+
+CONTRATANTE: [Razão Social / CNPJ]
+CONTRATADA: pontoON Sistemas de Ponto Eletrônico Ltda
+
+As partes acima têm, entre si, justo e contratado o presente instrumento de prestação de serviços de software de ponto eletrônico com identificação facial, relatórios automatizados via e-mail e gestão operacional, mediante as cláusulas seguintes:
+
+CLÁUSULA PRIMEIRA - DO OBJETO: O presente contrato tem por objeto a disponibilização do ecossistema pontoON (Apps Admin e Prestador), incluindo reconhecimento facial e envio automático de relatórios.
+CLÁUSULA SEGUNDA - DOS VALORES E PAGAMENTOS: O pagamento será mensal, validado via carimbo digital do sistema Master.
+CLÁUSULA TERCEIRA - DA VIGÊNCIA: O contrato entra em vigor na data de sua confirmação digital pelo cliente.</textarea>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="fecharModalContrato()" class="px-4 py-2 border rounded-lg text-sm text-gray-600">Cancelar</button>
+                    <button onclick="salvarEnviarContrato()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">Salvar e Enviar para Cliente (Aguardando Confirmação)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT DE CONTROLE DO SISTEMA MASTER (AGORA COM INTEGRAÇÃO BACKEND) -->
+    <script>
+        // Função atualizada para enviar a senha para a API (Vercel)
+        async function handleAuth(event) {
+            event.preventDefault();
+
+            const pass = document.getElementById('master-password').value;
+            const btnSubmit = event.target.querySelector('button[type="submit"]');
+            const errorEl = document.getElementById('auth-error');
+
+            // UI de carregamento
+            const originalText = btnSubmit.innerText;
+            btnSubmit.innerText = "Validando no Servidor...";
+            btnSubmit.disabled = true;
+            errorEl.classList.add('hidden');
+
+            try {
+                // Faz a chamada para o backend Python (que lê a variável na Vercel)
+                const response = await fetch(`${window.location.origin}/api/login-master`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ senha: pass })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    // Se sucesso, esconde modal e mostra painel
+                    document.getElementById('auth-modal').classList.add('hidden');
+                    document.getElementById('app-container').classList.remove('hidden');
+                    // Salva um token localmente
+                    localStorage.setItem('pontoON_master_token', data.token);
+                } else {
+                    // Mostra erro vindo do backend
+                    errorEl.innerText = data.message || "Senha incorreta. Tente novamente.";
+                    errorEl.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error("Erro na comunicação com a API:", error);
+
+                // --- MODO FALLBACK (APAGUE ISSO QUANDO A API ESTIVER NO AR) ---
+                // Caso você teste localmente antes de subir para a Vercel
+                if (pass === "123") {
+                    document.getElementById('auth-modal').classList.add('hidden');
+                    document.getElementById('app-container').classList.remove('hidden');
+                } else {
+                    errorEl.innerText = "Erro ao conectar com o backend. Verifique sua conexão.";
+                    errorEl.classList.remove('hidden');
+                }
+                // --------------------------------------------------------------
+            } finally {
+                // Restaura botão
+                btnSubmit.innerText = originalText;
+                btnSubmit.disabled = false;
+            }
+        }
+
+        // ---------- RESTANTE DO CÓDIGO INTACTO ----------
+
+        function logout() {
+            document.getElementById('master-password').value = '';
+            document.getElementById('auth-error').classList.add('hidden');
+            document.getElementById('app-container').classList.add('hidden');
+            document.getElementById('auth-modal').classList.remove('hidden');
+            localStorage.removeItem('pontoON_master_token');
+        }
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        function switchTab(tabId) {
+            // Esconde todas as abas
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            // Remove destaque dos botões
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-indigo-600', 'bg-indigo-50');
+                btn.classList.add('text-gray-600', 'hover:text-indigo-600', 'hover:bg-gray-50');
+            });
+
+            // Mostra a aba selecionada
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+
+            // Destaca botão correspondente (se desktop)
+            const activeBtn = document.getElementById('nav-' + tabId);
+            if(activeBtn) {
+                activeBtn.classList.remove('text-gray-600', 'hover:text-indigo-600', 'hover:bg-gray-50');
+                activeBtn.classList.add('text-indigo-600', 'bg-indigo-50');
+            }
+        }
+
+        // Funções de Ações de Cliente
+        function carimboPagamento(cliente) {
+            alert(`[CARIMBO DE PAGAMENTO]: Pagamento autenticado com sucesso para ${cliente}! Cliente ativado no ecossistema pontoON.`);
+        }
+
+        function enviarReciboEmail(cliente) {
+            alert(`[RECIBO AUTOMÁTICO]: Recibo gerado e enviado com sucesso para o email de ${cliente}.`);
+        }
+
+        function toggleStatusCliente(cliente) {
+            alert(`Status do cliente ${cliente} alternado com sucesso.`);
+        }
+
+        function gerarPixModal(cliente) {
+            alert(`[PIX GERADO]: Código PIX e QR Code injetados no painel do cliente ${cliente} para período de vencimento.`);
+        }
+
+        function gerarContratoModal(cliente) {
+            document.getElementById('modal-contrato').classList.remove('hidden');
+        }
+
+        function fecharModalContrato() {
+            document.getElementById('modal-contrato').classList.add('hidden');
+        }
+
+        function salvarEnviarContrato() {
+            alert("Contrato salvo e enviado para o cliente. O sistema agora aguarda a confirmação digital.");
+            fecharModalContrato();
+        }
+
+        function visualizarHistorico(cliente) {
+            alert(`Histórico de pagamentos e logs de autenticação facial de ${cliente} carregado.`);
+        }
+
+        function abrirModalEdicao(cliente) {
+            document.getElementById('modal-edicao').classList.remove('hidden');
+        }
+
+        function fecharModalEdicao() {
+            document.getElementById('modal-edicao').classList.add('hidden');
+        }
+
+        function salvarEdicao(event) {
+            event.preventDefault();
+            alert("Dados da empresa atualizados com sucesso!");
+            fecharModalEdicao();
+        }
+
+        function excluirEmpresa(cliente) {
+            if(confirm(`Tem certeza que deseja excluir o registro de ${cliente}?`)) {
+                alert("Empresa excluída do sistema Master.");
+            }
+        }
+
+        function gerarOrdemServico(servico) {
+            alert(`Ordem de Serviço gerada com sucesso para: ${servico}`);
+        }
+
+        function verificarDatabase() {
+            alert("Verificação de integridade do banco de dados concluída. Partições e índices otimizados.");
+        }
+
+        function imprimirListaEmpresas() {
+            window.print();
+        }
+
+        function salvarNovoCliente(event) {
+            event.preventDefault();
+            alert("Nova empresa cadastrada com sucesso no sistema pontoON!");
+            document.getElementById('form-novo-cliente').reset();
+        }
+    </script>
+</body>
+</html>
